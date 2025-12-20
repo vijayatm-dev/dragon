@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dragon</title>
+    <link rel="stylesheet" href="popup.css">
+    <link rel="icon" type="image/png" href="icon16.png">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Dragon</h1>
+        </header>
+
+        <div class="tab-content active">
+            <div class="controls">
+                <button id="dragon-screenshot" class="btn btn-primary">Take Screenshot</button>
+                <button id="dragon-start-recording" class="btn btn-success">Start Recording</button>
+                <button id="dragon-stop-recording" class="btn btn-danger" disabled>Stop Recording</button>
+            </div>
+
+            <div class="status-bar">
+                <span id="dragon-status">Ready</span>
+                <span id="dragon-timer">00:00</span>
+            </div>
+
+            <div class="dragon-container">
+                <div class="info-box">
+                    <p><strong>Dragon</strong></p>
+                    <p class="tagline"><em>Detailed Report Analysis Generator - ON</em></p>
+                    <p>Captures:</p>
+                    <ul>
+                        <li>Screen Video</li>
+                        <li>Console Logs</li>
+                        <li>Network Activity</li>
+                        <li>User Actions</li>
+                        <li>Environment Info</li>
+                    </ul>
+                    <p class="note">Note: Recording happens in the background.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+</body>
+
+</html>
