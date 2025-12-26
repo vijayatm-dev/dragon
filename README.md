@@ -59,9 +59,6 @@ dragon/
 - Chrome DevTools Protocol for console and network capture
 - Fully self-contained HTML reports with embedded video recordings
 
-## License
-
-[Your License Here]
 
 ## Contributing
 
