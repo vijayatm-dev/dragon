@@ -7,8 +7,11 @@ let xhrRequests = new Map();
 let requestIdCounter = 0;
 
 // Recording state management
+// NOTE: This state can be lost when service worker restarts in MV3
+// We persist critical state to chrome.storage.session for cross-tab scenarios
 let recordingState = {
     isRecording: false,
+    isFullscreen: false,
     tabId: null,
     startTime: null,
     debuggerAttached: false,
@@ -17,12 +20,55 @@ let recordingState = {
     actions: []
 };
 
+// Persist recording state to chrome.storage.session
+// This ensures recording can be stopped even after service worker restarts
+async function saveRecordingState() {
+    try {
+        await chrome.storage.session.set({
+            dragonRecordingState: {
+                isRecording: recordingState.isRecording,
+                isFullscreen: recordingState.isFullscreen,
+                tabId: recordingState.tabId,
+                startTime: recordingState.startTime
+            }
+        });
+    } catch (error) {
+        console.error('[DRAGON BACKGROUND] Failed to save recording state:', error);
+    }
+}
+
+// Load recording state from chrome.storage.session on startup
+async function loadRecordingState() {
+    try {
+        const result = await chrome.storage.session.get('dragonRecordingState');
+        if (result.dragonRecordingState) {
+            const saved = result.dragonRecordingState;
+            recordingState.isRecording = saved.isRecording || false;
+            recordingState.isFullscreen = saved.isFullscreen || false;
+            recordingState.tabId = saved.tabId || null;
+            recordingState.startTime = saved.startTime || null;
+            console.log('[DRAGON BACKGROUND] Restored recording state from session storage:', saved);
+        }
+    } catch (error) {
+        console.error('[DRAGON BACKGROUND] Failed to load recording state:', error);
+    }
+}
+
+// Load state when service worker starts
+loadRecordingState();
+
+
 // Message handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[DRAGON BACKGROUND] Message received:', message.type);
 
     if (message.type === 'START_DRAGON_RECORDING') {
         handleStartDragonRecording(message.tabId)
+            .then(() => sendResponse({ success: true }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
+        return true;
+    } else if (message.type === 'START_DRAGON_RECORDING_FULLSCREEN') {
+        handleStartFullscreenRecording(message.tabId)
             .then(() => sendResponse({ success: true }))
             .catch(err => sendResponse({ success: false, error: err.message }));
         return true;
@@ -52,9 +98,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true;
     } else if (message.type === 'GET_RECORDING_STATE') {
+        // Only report as recording if startTime is set (picker confirmed)
+        // This prevents showing pill timer while picker dialog is open
+        const actuallyRecording = recordingState.isRecording && recordingState.startTime !== null;
         sendResponse({
             success: true,
-            isRecording: recordingState.isRecording,
+            isRecording: actuallyRecording,
             startTime: recordingState.startTime
         });
         return false;
@@ -207,6 +256,9 @@ async function handleStartDragonRecording(tabId) {
     recordingState.actions = [];
     xhrRequests.clear(); // Clear previous XHR requests
 
+    // Persist state for cross-tab scenarios (survives service worker restarts)
+    await saveRecordingState();
+
     console.log('[DRAGON BACKGROUND] 🔄 Recording state initialized:', {
         tabId: recordingState.tabId,
         startTime: new Date(recordingState.startTime).toISOString(),
@@ -284,22 +336,137 @@ async function handleStartDragonRecording(tabId) {
     }
 }
 
+// Start Dragon fullscreen recording (uses getDisplayMedia in offscreen document)
+async function handleStartFullscreenRecording(tabId) {
+    if (recordingState.isRecording) {
+        throw new Error('Already recording');
+    }
+
+    console.log('[DRAGON BACKGROUND] Starting fullscreen recording for tab:', tabId);
+
+    try {
+        // Set preliminary state (startTime will be set after picker confirmation)
+        recordingState.isRecording = true;
+        recordingState.isFullscreen = true;
+        recordingState.tabId = tabId;
+        recordingState.startTime = null; // Will be set after user confirms picker
+        recordingState.consoleLogs = [];
+        recordingState.networkLogs = [];
+        recordingState.actions = [];
+        xhrRequests.clear();
+
+        // Persist preliminary state (will be updated after picker confirmation)
+        await saveRecordingState();
+
+        console.log('[DRAGON BACKGROUND] 🔄 Fullscreen recording state initialized (waiting for picker)');
+
+        // 1. Ensure content script is injected
+        await ensureContentScriptInjected(tabId);
+
+        // 2. Create offscreen document with DISPLAY_MEDIA reason for getDisplayMedia
+        await createOffscreenDocumentForDisplayMedia();
+
+        // 3. Start recording in offscreen - this will show the picker dialog
+        // The call only returns AFTER user clicks Share (or cancels)
+        const response = await chrome.runtime.sendMessage({
+            type: 'START_DISPLAY_MEDIA_RECORDING'
+        });
+
+        if (!response || !response.success) {
+            throw new Error(response?.error || 'Failed to start screen recording');
+        }
+
+        // 4. NOW set the startTime - user has confirmed the picker
+        recordingState.startTime = Date.now();
+
+        // Persist state for cross-tab scenarios (survives service worker restarts)
+        await saveRecordingState();
+
+        console.log('[DRAGON BACKGROUND] ✅ Recording started at:', new Date(recordingState.startTime).toISOString());
+
+        // 5. Notify Content Script to start recording actions
+        console.log('[DRAGON BACKGROUND] Sending START_RECORDING to content script');
+        chrome.tabs.sendMessage(tabId, {
+            type: 'START_RECORDING',
+            startTime: recordingState.startTime
+        }).catch(() => {
+            console.warn('[DRAGON BACKGROUND] Failed to send START_RECORDING to content script');
+        });
+
+        // 5. Attach debugger for Console and Network logs
+        try {
+            await chrome.debugger.attach({ tabId }, '1.3');
+            recordingState.debuggerAttached = true;
+
+            await chrome.debugger.sendCommand({ tabId }, 'Console.enable');
+            await chrome.debugger.sendCommand({ tabId }, 'Runtime.enable');
+            await chrome.debugger.sendCommand({ tabId }, 'Network.enable');
+
+            console.log('[DRAGON BACKGROUND] Debugger attached and domains enabled');
+        } catch (e) {
+            const errorMsg = e.message.toLowerCase();
+            const isRestrictedError =
+                errorMsg.includes('chrome-extension') ||
+                errorMsg.includes('chrome://') ||
+                errorMsg.includes('devtools://') ||
+                errorMsg.includes('cannot access') ||
+                errorMsg.includes('not allowed');
+
+            if (isRestrictedError) {
+                console.warn('[DRAGON BACKGROUND] Cannot attach debugger - page has restricted content');
+            } else {
+                console.error('[DRAGON BACKGROUND] Debugger setup failed:', e.message);
+            }
+            recordingState.debuggerAttached = false;
+        }
+    } catch (error) {
+        console.error('[DRAGON BACKGROUND] Failed to start fullscreen recording:', error);
+        // Rollback state
+        recordingState.isRecording = false;
+        recordingState.isFullscreen = false;
+        recordingState.tabId = null;
+        recordingState.startTime = null;
+        recordingState.debuggerAttached = false;
+        throw error;
+    }
+}
+
 // Stop Dragon recording
 async function handleStopDragonRecording() {
-    if (!recordingState.isRecording) {
-        throw new Error('Not recording');
+    // Check if we think we're recording
+    // Note: State may have been lost if service worker restarted
+    // We'll still try to stop offscreen recording to be safe
+    const wasRecording = recordingState.isRecording;
+
+    if (!wasRecording) {
+        console.warn('[DRAGON BACKGROUND] State says not recording - service worker may have restarted');
+        console.log('[DRAGON BACKGROUND] Attempting to stop offscreen recording anyway...');
     }
 
     console.log('[DRAGON BACKGROUND] Stopping recording...');
 
-    // 1. Stop recording in offscreen
-    const response = await chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
+    // 1. Stop recording in offscreen - ALWAYS try this
+    let videoDataUrl = '';
+    try {
+        const response = await chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
 
-    if (!response || !response.success) {
-        throw new Error(response?.error || 'Failed to stop recording in offscreen document');
+        if (response && response.success) {
+            videoDataUrl = response.dataUrl;
+        } else {
+            console.warn('[DRAGON BACKGROUND] Offscreen stop failed:', response?.error);
+            // If state was lost and offscreen also fails, throw error
+            if (!wasRecording) {
+                throw new Error('Not recording');
+            }
+        }
+    } catch (offscreenError) {
+        console.warn('[DRAGON BACKGROUND] Could not communicate with offscreen:', offscreenError);
+        // If state was lost and offscreen also fails, throw error
+        if (!wasRecording) {
+            throw new Error('Not recording');
+        }
+        // Otherwise continue with whatever data we have
     }
-
-    const videoDataUrl = response.dataUrl;
 
     // 2. Notify Content Script to stop recording actions
     if (recordingState.tabId) {
@@ -314,7 +481,7 @@ async function handleStopDragonRecording() {
     }, 60000); // 1 minute timeout
 
     // 3. Detach debugger
-    if (recordingState.debuggerAttached) {
+    if (recordingState.debuggerAttached && recordingState.tabId) {
         try {
             await chrome.debugger.detach({ tabId: recordingState.tabId });
             recordingState.debuggerAttached = false;
@@ -325,19 +492,23 @@ async function handleStopDragonRecording() {
 
     const result = {
         video: videoDataUrl,
-        consoleLogs: recordingState.consoleLogs,
+        consoleLogs: recordingState.consoleLogs || [],
         networkLogs: Array.from(xhrRequests.values()),
-        actions: recordingState.actions
+        actions: recordingState.actions || []
     };
 
     console.log('[DRAGON BACKGROUND] Recording stopped - Console logs:', result.consoleLogs.length, 'Network logs:', result.networkLogs.length, 'Actions:', result.actions.length);
 
     recordingState.isRecording = false;
+    recordingState.isFullscreen = false;
     recordingState.tabId = null;
     recordingState.startTime = null;
     recordingState.debuggerAttached = false;
     recordingState.consoleLogs = [];
     recordingState.actions = [];
+
+    // Clear persisted state
+    await saveRecordingState();
 
     return result;
 }
@@ -366,6 +537,31 @@ async function createOffscreenDocument() {
             justification: 'Recording from tab'
         });
         console.log('[DRAGON BACKGROUND] Offscreen document created');
+    } catch (error) {
+        if (error.message.startsWith('Only a single offscreen document may be created')) {
+            console.log('[DRAGON BACKGROUND] Offscreen document already exists');
+            return;
+        }
+        throw error;
+    }
+}
+
+// Create offscreen document for display media (screen/window capture)
+async function createOffscreenDocumentForDisplayMedia() {
+    // First close any existing offscreen document
+    try {
+        await chrome.offscreen.closeDocument();
+    } catch (e) {
+        // Ignore - document may not exist
+    }
+
+    try {
+        await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['DISPLAY_MEDIA'],
+            justification: 'Recording screen or window for bug report'
+        });
+        console.log('[DRAGON BACKGROUND] Offscreen document created for display media');
     } catch (error) {
         if (error.message.startsWith('Only a single offscreen document may be created')) {
             console.log('[DRAGON BACKGROUND] Offscreen document already exists');

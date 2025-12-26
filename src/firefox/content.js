@@ -177,8 +177,9 @@ class ScreenCaptureManager {
 
             console.log('[DRAGON CAPTURE] Screen capture obtained');
 
-            // Hide the prompt
+            // Hide the prompt and wait for it to be fully removed before recording
             this.hideCapturePrompt();
+            await new Promise(resolve => setTimeout(resolve, 350)); // Wait for 300ms fade + buffer
 
             // Setup MediaRecorder
             const mimeTypes = [
@@ -293,39 +294,40 @@ class RecordingControlUI {
             return;
         }
 
-        // Create overlay container
+        // Create overlay container - Light theme matching popup
         this.overlay = document.createElement('div');
         this.overlay.id = 'dragon-recording-control';
         this.overlay.style.cssText = `
             position: fixed;
             top: ${this.position.y}px;
             left: ${this.position.x}px;
-            background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(20, 20, 20, 0.95));
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 50px;
-            padding: 10px 18px;
+            padding: 10px 20px;
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
             z-index: 999999;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
             cursor: move;
             user-select: none;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             opacity: 0;
-            transform: scale(0.8);
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: scale(0.8) translateY(-10px);
+            transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
         `;
 
-        // Recording indicator (red dot)
+        // Recording indicator (orange dot)
         const indicator = document.createElement('div');
         indicator.style.cssText = `
             width: 10px;
             height: 10px;
-            background: #ff4444;
+            background: #FF6B35;
             border-radius: 50%;
-            animation: dragonPulse 2s ease-in-out infinite;
+            animation: dragonPulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 8px rgba(255, 107, 53, 0.5);
         `;
 
         // Add pulse animation
@@ -334,15 +336,16 @@ class RecordingControlUI {
             style.id = 'dragon-animations';
             style.textContent = `
                 @keyframes dragonPulse {
-                    0%, 100% { opacity: 1; transform: scale(1); }
-                    50% { opacity: 0.6; transform: scale(0.8); }
+                    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px rgba(255, 107, 53, 0.5); }
+                    50% { opacity: 0.7; transform: scale(0.85); box-shadow: 0 0 4px rgba(255, 107, 53, 0.3); }
                 }
                 #dragon-recording-control:hover {
-                    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.06);
                 }
                 #dragon-stop-btn:hover {
-                    background: linear-gradient(135deg, #ff5555, #cc0000) !important;
-                    transform: scale(1.05);
+                    background: linear-gradient(135deg, #E55A2B, #D64520) !important;
+                    transform: scale(1.08);
+                    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.45) !important;
                 }
                 #dragon-stop-btn:active {
                     transform: scale(0.95);
@@ -356,33 +359,32 @@ class RecordingControlUI {
         timer.id = 'dragon-timer-display';
         timer.textContent = '00:00';
         timer.style.cssText = `
-            color: #ffffff;
-            font-size: 16px;
+            color: #1A1A1A;
+            font-size: 15px;
             font-weight: 600;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
             letter-spacing: 0.5px;
-            min-width: 50px;
+            min-width: 48px;
             text-align: center;
         `;
 
-        // Stop button
+        // Stop button - Orange gradient matching popup
         const stopBtn = document.createElement('button');
         stopBtn.id = 'dragon-stop-btn';
-        stopBtn.textContent = '■';
+        stopBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="1" y="1" width="10" height="10" rx="1.5"/></svg>`;
         stopBtn.style.cssText = `
-            background: linear-gradient(135deg, #ff4444, #cc0000);
+            background: linear-gradient(135deg, #FF6B35, #F7931E);
             border: none;
             border-radius: 50%;
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             color: white;
-            font-size: 14px;
-            font-weight: bold;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
         `;
 
         stopBtn.addEventListener('click', (e) => {
@@ -415,7 +417,7 @@ class RecordingControlUI {
         // Trigger fade-in animation
         requestAnimationFrame(() => {
             this.overlay.style.opacity = '1';
-            this.overlay.style.transform = 'scale(1)';
+            this.overlay.style.transform = 'scale(1) translateY(0)';
         });
     }
 
@@ -520,8 +522,15 @@ class RecordingControlUI {
     async stopRecording() {
         try {
             // Stop screen capture first and get video URL
+            // Note: If stopping from a different tab, screenCapture will have no data
             let videoUrl = null;
+            let captureWasActive = false;
+
             if (window.screenCapture) {
+                // Check if this content script was actively capturing
+                captureWasActive = window.screenCapture.isCapturing ||
+                    (window.screenCapture.mediaRecorder &&
+                        window.screenCapture.mediaRecorder.state === 'recording');
                 videoUrl = await window.screenCapture.stopCapture();
             }
 
@@ -534,13 +543,26 @@ class RecordingControlUI {
             if (!response || !response.success) {
                 console.error('[DRAGON UI] ❌ Stop recording failed:', response?.error);
                 this.forceStop();
-                alert('Recording has been stopped. Data may not be saved.');
+
+                // If error is "Not recording", the recording may have already stopped
+                if (response?.error === 'Not recording') {
+                    alert('Recording was already stopped or not active on this tab.');
+                } else {
+                    alert('Recording has been stopped. Data may not be saved.');
+                }
                 return;
             }
 
             this.hide();
 
             const { consoleLogs, networkLogs, actions } = response.data;
+
+            // Warn user if video is not available (cross-tab scenario)
+            if (!videoUrl && !captureWasActive) {
+                console.warn('[DRAGON UI] ⚠️ No video captured - recording may have been started in a different tab');
+                // Still generate report but without video
+            }
+
             await this.generateAndDownloadReport(videoUrl, consoleLogs, networkLogs, actions);
 
             setTimeout(() => {
@@ -1071,11 +1093,72 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         recordingUI.show(message.startTime);
         sendResponse({ success: true });
     } else if (message.type === 'STOP_RECORDING') {
+        // This is received when user stops from ANOTHER tab
+        // The original tab (this one) should generate the report since it has the video!
+
+        // Check if this tab was actively capturing video
+        const wasCapturing = window.screenCapture &&
+            (window.screenCapture.isCapturing ||
+                (window.screenCapture.mediaRecorder &&
+                    window.screenCapture.mediaRecorder.state === 'recording') ||
+                window.screenCapture.recordedChunks?.length > 0);
+
+        console.log('[DRAGON CONTENT] STOP_RECORDING received, wasCapturing:', wasCapturing);
+
+        // Stop action recording and hide UI
         actionRecorder.stop();
         recordingUI.hide();
+
+        if (wasCapturing) {
+            // This tab was recording video - generate the report FROM HERE
+            console.log('[DRAGON CONTENT] Generating report from original tab (cross-tab stop)');
+
+            // Use async IIFE to handle the async operation
+            (async () => {
+                try {
+                    // Stop capture and get video URL
+                    const videoUrl = await window.screenCapture.stopCapture();
+                    console.log('[DRAGON CONTENT] Video captured, URL:', videoUrl ? 'present' : 'none');
+
+                    // Get logs from background (background already has them)
+                    // Note: We're requesting the logs that were collected during recording
+                    const response = await browser.runtime.sendMessage({
+                        type: 'GET_RECORDING_LOGS'
+                    });
+
+                    const consoleLogs = response?.data?.consoleLogs || [];
+                    const networkLogs = response?.data?.networkLogs || [];
+                    const actions = response?.data?.actions || [];
+
+                    // Generate and download the report
+                    await recordingUI.generateAndDownloadReport(videoUrl, consoleLogs, networkLogs, actions);
+
+                    console.log('[DRAGON CONTENT] ✅ Report generated from original tab');
+
+                    // Notify background that recording was saved
+                    browser.runtime.sendMessage({ type: 'DRAGON_RECORDING_SAVED' }).catch(() => { });
+
+                } catch (error) {
+                    console.error('[DRAGON CONTENT] ❌ Failed to generate report:', error);
+                    // Still stop the capture even if report fails
+                    if (window.screenCapture) {
+                        window.screenCapture.stopCapture().catch(() => { });
+                    }
+                }
+            })();
+        } else {
+            // This tab wasn't capturing - just stop any residual capture
+            if (window.screenCapture) {
+                window.screenCapture.stopCapture().catch(() => {
+                    console.warn('[DRAGON CONTENT] Screen capture already stopped or not active');
+                });
+            }
+        }
+
         sendResponse({ success: true });
     } else if (message.type === 'PING') {
         sendResponse({ success: true });
     }
-    return false;
+    return true; // Keep channel open for async operations
 });
+

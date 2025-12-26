@@ -1,3 +1,5 @@
+import { api } from '../browser-compat.js';
+
 export class ReportGenerator {
     static async generateReport(videoBlob, logs) {
         try {
@@ -6,7 +8,7 @@ export class ReportGenerator {
             console.log('[ReportGenerator] Video blob type:', videoBlob?.type);
 
             // Read the template
-            const templateUrl = browser.runtime.getURL('modules/report_template.html');
+            const templateUrl = api.runtime.getURL('modules/report_template.html');
             const templateResponse = await fetch(templateUrl);
             let template = await templateResponse.text();
 
@@ -40,7 +42,7 @@ export class ReportGenerator {
         return new Promise((resolve, reject) => {
             if (!blob || blob.size === 0) {
                 console.warn('[ReportGenerator] Empty or invalid blob, returning empty data URL');
-                resolve('data:video/webm;base64,');//No I18N
+                resolve('data:video/webm;base64,');
                 return;
             }
 

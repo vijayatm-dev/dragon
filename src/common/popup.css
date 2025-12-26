@@ -1,0 +1,387 @@
+/* CSS Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Variables */
+:root {
+  --primary-orange: #FF6B35;
+  --primary-gradient: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  --bg-light: #F5F5F5;
+  --bg-card: #F8F8F8;
+  --bg-white: #FFFFFF;
+  --text-dark: #1A1A1A;
+  --text-gray: #666666;
+  --text-light: #999999;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.15);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 50%;
+}
+
+/* Body */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  width: 360px;
+  min-height: 420px;
+  background: var(--bg-white);
+  color: var(--text-dark);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Container */
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: var(--bg-white);
+  overflow: hidden;
+  padding: 0 12px 12px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 8px;
+  background: var(--bg-white);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-dark);
+  letter-spacing: -0.5px;
+}
+
+/* Timer Badge */
+.timer-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-light);
+  border-radius: 20px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dark);
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.timer-badge.active {
+  opacity: 1;
+}
+
+.timer-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: #FFB347;
+  transition: background 0.3s ease;
+}
+
+.timer-badge.active .timer-dot {
+  background: var(--primary-orange);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}
+
+/* Main Content */
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Feature Cards */
+.feature-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-gray);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+  align-self: flex-start;
+}
+
+/* Record Button */
+.record-btn {
+  width: 100px;
+  height: 100px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--primary-gradient);
+  box-shadow: 0 8px 30px rgba(255, 107, 53, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  margin-bottom: 20px;
+}
+
+.record-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 40px rgba(255, 107, 53, 0.5);
+}
+
+.record-btn:active {
+  transform: scale(0.98);
+}
+
+.record-btn .record-icon,
+.record-btn .stop-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.record-btn.recording {
+  background: linear-gradient(135deg, #E53935 0%, #C62828 100%);
+  box-shadow: 0 8px 30px rgba(229, 57, 53, 0.4);
+  animation: recordPulse 2s ease-in-out infinite;
+}
+
+@keyframes recordPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 8px 30px rgba(229, 57, 53, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 8px 40px rgba(229, 57, 53, 0.6);
+  }
+}
+
+/* Recording Mode Toggle */
+.recording-mode-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.mode-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-gray);
+  transition: color 0.2s ease;
+}
+
+.mode-label.active {
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #E0E0E0;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked+.toggle-slider {
+  background-color: var(--primary-orange);
+}
+
+.toggle-switch input:checked+.toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.recording-mode-selector .mode-hint {
+  font-size: 11px;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+/* Hide mode selector on Firefox */
+.recording-mode-selector.hidden {
+  display: none;
+}
+
+/* Activity Grid */
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.activity-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.activity-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-gray);
+}
+
+.activity-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.activity-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-gray);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* Screenshot Card */
+.screenshot-card {
+  padding: 16px 20px;
+}
+
+.screenshot-card .card-title {
+  margin-bottom: 14px;
+}
+
+/* Screenshot Button */
+.screenshot-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--bg-white);
+  border: 2px solid var(--primary-orange);
+  border-radius: var(--radius-lg);
+  color: var(--primary-orange);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.screenshot-btn:hover {
+  background: rgba(255, 107, 53, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+}
+
+.screenshot-btn:active {
+  transform: translateY(0);
+}
+
+.screenshot-btn .camera-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DDD;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #CCC;
+}
+
+/* Status indicators (hidden by default, used by JS) */
+#dragon-status {
+  display: none;
+}

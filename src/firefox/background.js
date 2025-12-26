@@ -5,6 +5,8 @@
 console.log('[DRAGON BACKGROUND] Background script loaded (Firefox)');
 
 // Recording state management
+// NOTE: This state can be lost when background script restarts
+// We persist critical state to browser.storage.session for cross-tab scenarios
 let recordingState = {
     isRecording: false,
     tabId: null,
@@ -14,6 +16,44 @@ let recordingState = {
     actions: [],
     pendingCapture: false // Waiting for user to click capture button
 };
+
+// Persist recording state to browser.storage.session
+// This ensures recording can be stopped even after background script restarts
+async function saveRecordingState() {
+    try {
+        await browser.storage.session.set({
+            dragonRecordingState: {
+                isRecording: recordingState.isRecording,
+                tabId: recordingState.tabId,
+                startTime: recordingState.startTime,
+                pendingCapture: recordingState.pendingCapture
+            }
+        });
+    } catch (error) {
+        console.error('[DRAGON BACKGROUND] Failed to save recording state:', error);
+    }
+}
+
+// Load recording state from browser.storage.session on startup
+async function loadRecordingState() {
+    try {
+        const result = await browser.storage.session.get('dragonRecordingState');
+        if (result.dragonRecordingState) {
+            const saved = result.dragonRecordingState;
+            recordingState.isRecording = saved.isRecording || false;
+            recordingState.tabId = saved.tabId || null;
+            recordingState.startTime = saved.startTime || null;
+            recordingState.pendingCapture = saved.pendingCapture || false;
+            console.log('[DRAGON BACKGROUND] Restored recording state from session storage:', saved);
+        }
+    } catch (error) {
+        console.error('[DRAGON BACKGROUND] Failed to load recording state:', error);
+    }
+}
+
+// Load state when background script starts
+loadRecordingState();
+
 
 // Message handling
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -67,6 +107,17 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     isRecording: recordingState.isRecording,
                     startTime: recordingState.startTime
                 });
+            } else if (message.type === 'GET_RECORDING_LOGS') {
+                // Return collected logs to content script for report generation
+                // Used when original tab generates report (cross-tab stop scenario)
+                sendResponse({
+                    success: true,
+                    data: {
+                        consoleLogs: recordingState.consoleLogs || [],
+                        networkLogs: recordingState.networkLogs || [],
+                        actions: recordingState.actions || []
+                    }
+                });
             } else if (message.type === 'EXECUTE_PAGE_SCRIPT') {
                 // Firefox: Execute script in page context
                 const tabId = sender.tab?.id;
@@ -78,6 +129,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 try {
                     const result = await browser.scripting.executeScript({
                         target: { tabId: tabId },
+                        world: 'MAIN',
                         func: () => {
                             try {
                                 const details = {};
@@ -148,6 +200,11 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     sendResponse({ success: false, data: {} });
                 }
             } else if (message.type === 'DRAGON_RECORDING_SAVED') {
+                // Report was saved - now safe to clear logs
+                console.log('[DRAGON BACKGROUND] Recording saved, clearing logs');
+                recordingState.consoleLogs = [];
+                recordingState.networkLogs = [];
+                recordingState.actions = [];
                 sendResponse({ success: true });
             } else if (message.type === 'REQUEST_CAPTURE_PROMPT') {
                 // Popup requests to show capture prompt on the page
@@ -160,6 +217,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     recordingState.pendingCapture = false;
                     recordingState.isRecording = true;
                     recordingState.startTime = Date.now();
+
+                    // Persist state for cross-tab scenarios
+                    await saveRecordingState();
+
                     // Tell content script to show timer and start action recording
                     browser.tabs.sendMessage(recordingState.tabId, {
                         type: 'START_RECORDING',
@@ -269,6 +330,9 @@ async function handleStartDragonRecording(tabId) {
     recordingState.networkLogs = [];
     recordingState.actions = [];
 
+    // Persist state for cross-tab scenarios
+    await saveRecordingState();
+
     try {
         await ensureContentScriptInjected(tabId);
         browser.tabs.sendMessage(tabId, {
@@ -280,41 +344,70 @@ async function handleStartDragonRecording(tabId) {
         recordingState.isRecording = false;
         recordingState.tabId = null;
         recordingState.startTime = null;
+        await saveRecordingState();
         throw error;
     }
 }
 
 // Stop Dragon recording
 async function handleStopDragonRecording() {
-    if (!recordingState.isRecording) {
-        throw new Error('Not recording');
+    // Check if we think we're recording
+    // Note: State may have been lost if background script restarted
+    const wasRecording = recordingState.isRecording;
+    const originalTabId = recordingState.tabId;
+
+    if (!wasRecording) {
+        console.warn('[DRAGON BACKGROUND] State says not recording - background may have restarted');
+        // Don't throw immediately - try to get stored state
+        try {
+            const stored = await browser.storage.session.get('dragonRecordingState');
+            if (stored.dragonRecordingState && stored.dragonRecordingState.isRecording) {
+                console.log('[DRAGON BACKGROUND] Found recording state in storage, using it');
+                recordingState.isRecording = true;
+                recordingState.tabId = stored.dragonRecordingState.tabId;
+                recordingState.startTime = stored.dragonRecordingState.startTime;
+            } else {
+                throw new Error('Not recording');
+            }
+        } catch (e) {
+            throw new Error('Not recording');
+        }
     }
 
     console.log('[DRAGON BACKGROUND] Stopping recording...');
 
-    // Notify Content Script to stop recording actions
-    if (recordingState.tabId) {
-        browser.tabs.sendMessage(recordingState.tabId, { type: 'STOP_RECORDING' }).catch(() => {
+    // Notify Content Script to stop recording actions (send to original tab if known)
+    // The original tab will fetch logs via GET_RECORDING_LOGS and generate the report
+    const tabToNotify = recordingState.tabId || originalTabId;
+    if (tabToNotify) {
+        browser.tabs.sendMessage(tabToNotify, { type: 'STOP_RECORDING' }).catch(() => {
             console.warn('[DRAGON BACKGROUND] Failed to send STOP_RECORDING to content script');
         });
     }
 
     const result = {
-        // Video is not included - handled in popup
-        consoleLogs: recordingState.consoleLogs,
-        networkLogs: recordingState.networkLogs,
-        actions: recordingState.actions
+        // Video is not included - handled in content script
+        consoleLogs: recordingState.consoleLogs || [],
+        networkLogs: recordingState.networkLogs || [],
+        actions: recordingState.actions || []
     };
 
     console.log('[DRAGON BACKGROUND] Recording stopped - Console logs:', result.consoleLogs.length, 'Network logs:', result.networkLogs.length, 'Actions:', result.actions.length);
 
-    // Reset state
+    // Reset recording state BUT keep logs temporarily
+    // The original tab needs to fetch logs via GET_RECORDING_LOGS before they're cleared
+    // Logs will be cleared when DRAGON_RECORDING_SAVED is received
     recordingState.isRecording = false;
     recordingState.tabId = null;
     recordingState.startTime = null;
-    recordingState.consoleLogs = [];
-    recordingState.networkLogs = [];
-    recordingState.actions = [];
+    // NOTE: Don't clear logs here! They're needed for cross-tab report generation
+    // recordingState.consoleLogs = [];  // Cleared on DRAGON_RECORDING_SAVED
+    // recordingState.networkLogs = [];  // Cleared on DRAGON_RECORDING_SAVED
+    // recordingState.actions = [];       // Cleared on DRAGON_RECORDING_SAVED
+
+    // Clear persisted state
+    await saveRecordingState();
 
     return result;
 }
+

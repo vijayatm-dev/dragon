@@ -17,99 +17,97 @@ class RecordingControlUI {
             return;
         }
 
-
-        // Create overlay container
+        // Create overlay container - Light theme matching popup
         this.overlay = document.createElement('div');
         this.overlay.id = 'dragon-recording-control';
         this.overlay.style.cssText = `
             position: fixed;
             top: ${this.position.y}px;
             left: ${this.position.x}px;
-            background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(20, 20, 20, 0.95));
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 50px;
-            padding: 10px 18px;
+            padding: 10px 20px;
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
             z-index: 999999;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
             cursor: move;
             user-select: none;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             opacity: 0;
-            transform: scale(0.8);
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: scale(0.8) translateY(-10px);
+            transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
         `;
 
-
-        // Recording indicator (red dot)
+        // Recording indicator (orange dot)
         const indicator = document.createElement('div');
         indicator.style.cssText = `
             width: 10px;
             height: 10px;
-            background: #ff4444;
+            background: #FF6B35;
             border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
+            animation: dragonPulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 8px rgba(255, 107, 53, 0.5);
         `;
 
         // Add pulse animation
         const style = document.createElement('style');
+        style.id = 'dragon-overlay-styles';
         style.textContent = `
-            @keyframes pulse {
-                0%, 100% { opacity: 1; transform: scale(1); }
-                50% { opacity: 0.6; transform: scale(0.8); }
-            }
-            @keyframes ripple {
-                from { transform: scale(0.8); opacity: 1; }
-                to { transform: scale(1.2); opacity: 0; }
+            @keyframes dragonPulse {
+                0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px rgba(255, 107, 53, 0.5); }
+                50% { opacity: 0.7; transform: scale(0.85); box-shadow: 0 0 4px rgba(255, 107, 53, 0.3); }
             }
             #dragon-recording-control:hover {
-                box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.06);
             }
             #dragon-stop-btn:hover {
-                background: linear-gradient(135deg, #ff5555, #cc0000);
-                transform: scale(1.05);
+                background: linear-gradient(135deg, #E55A2B, #D64520) !important;
+                transform: scale(1.08);
+                box-shadow: 0 6px 20px rgba(255, 107, 53, 0.45) !important;
             }
             #dragon-stop-btn:active {
                 transform: scale(0.95);
             }
         `;
-        document.head.appendChild(style);
+        if (!document.getElementById('dragon-overlay-styles')) {
+            document.head.appendChild(style);
+        }
 
         // Timer display
         const timer = document.createElement('div');
         timer.id = 'dragon-timer-display';
         timer.textContent = '00:00';
         timer.style.cssText = `
-            color: #ffffff;
-            font-size: 16px;
+            color: #1A1A1A;
+            font-size: 15px;
             font-weight: 600;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
             letter-spacing: 0.5px;
-            min-width: 50px;
+            min-width: 48px;
             text-align: center;
         `;
 
-        // Stop button
+        // Stop button - Orange gradient matching popup
         const stopBtn = document.createElement('button');
         stopBtn.id = 'dragon-stop-btn';
-        stopBtn.innerHTML = '■';
+        stopBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="1" y="1" width="10" height="10" rx="1.5"/></svg>`;
         stopBtn.style.cssText = `
-            background: linear-gradient(135deg, #ff4444, #cc0000);
+            background: linear-gradient(135deg, #FF6B35, #F7931E);
             border: none;
             border-radius: 50%;
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             color: white;
-            font-size: 14px;
-            font-weight: bold;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
         `;
 
         stopBtn.addEventListener('click', (e) => {
@@ -143,7 +141,7 @@ class RecordingControlUI {
         // Trigger fade-in animation
         requestAnimationFrame(() => {
             this.overlay.style.opacity = '1';
-            this.overlay.style.transform = 'scale(1)';
+            this.overlay.style.transform = 'scale(1) translateY(0)';
         });
     }
 
@@ -294,8 +292,21 @@ class RecordingControlUI {
     async generateAndDownloadReport(video, consoleLogs, networkLogs, actions) {
         try {
 
-            // 1. Fetch video blob
-            const videoBlob = await fetch(video).then(r => r.blob());
+            // 1. Convert video data URL to blob
+            // The video is now a base64 data URL from the offscreen document
+            // This works across tabs unlike blob URLs which are origin-scoped
+            let videoBlob;
+            if (video.startsWith('data:')) {
+                // Convert data URL to blob
+                const response = await fetch(video);
+                videoBlob = await response.blob();
+            } else if (video.startsWith('blob:')) {
+                // Fallback for blob URLs (should not happen with the fix, but handle gracefully)
+                console.warn('[DRAGON UI] Received blob URL instead of data URL - may fail in cross-tab scenario');
+                videoBlob = await fetch(video).then(r => r.blob());
+            } else {
+                throw new Error('Invalid video URL format: ' + video.substring(0, 50));
+            }
 
             if (videoBlob.size === 0) {
                 throw new Error('Video blob is empty - no data was recorded');
